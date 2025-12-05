@@ -16,20 +16,19 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are DraftSense AI — elite fantasy hockey analyst.
-For ANY stat question, you MUST use the browse_page tool on NHL.com player pages to get live 2025-26 numbers.
-Do NOT say "after retrieval" or "will update" — just give the real number with source.
+          content: `You are DraftSense AI.
+For any current stat question, use browse_page on the player's NHL.com or EliteProspects page.
+Extract ONLY the 2025-26 season stats.
+Answer instantly with real numbers — no "will update" or "retrieval".
 
 Format:
 **Player (Team)**
-Stat: Value (NHL.com) · Stat: Value
+SV%: .XXX (NHL.com) · GAA: X.XX · Record: W-L-OTL
 1-sentence context
 
 **Recommendation**
-1-line verdict
-**Edge → Player** (confidence %)
-
-Max 70 words.`
+Verdict
+**Edge → Player** (confidence %)`
         },
         { role: 'user', content: message }
       ],
@@ -38,12 +37,12 @@ Max 70 words.`
           type: "function",
           function: {
             name: "browse_page",
-            description: "Scrape live NHL stats",
+            description: "Get live NHL stats",
             parameters: {
               type: "object",
               properties: {
                 url: { type: "string" },
-                instructions: { type: "string" }
+                instructions: { type: "string", description: "Extract ONLY 2025-26 stats: SV%, GAA, record, goals, points. Ignore everything else." }
               },
               required: ["url", "instructions"]
             }
@@ -51,23 +50,20 @@ Max 70 words.`
         }
       ],
       tool_choice: "required",
-      temperature: 0.1,
+      temperature: 0,
       max_tokens: 250
     })
   });
 
   const data = await response.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
 
-  // This is the key: if Grok used the tool, it returns tool_calls → we execute and return the final answer
-  if (data.choices[0].message.tool_calls) {
-    const toolCall = data.choices[0].message.tool_calls[0];
-    const { url, instructions } = JSON.parse(toolCall.function.arguments);
+  if (toolCall) {
+    const args = JSON.parse(toolCall.function.arguments);
+    const page = await fetch(args.url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const html = await page.text();
 
-    const pageRes = await fetch(url);
-    const html = await pageRes.text();
-
-    // Send the scraped HTML back to Grok for final answer
-    const finalRes = await fetch('https://api.x.ai/v1/chat/completions', {
+    const final = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
@@ -76,18 +72,17 @@ Max 70 words.`
       body: JSON.stringify({
         model: 'grok-3',
         messages: [
-          { role: 'system', content: 'Extract the exact current stats from this HTML and answer in the required format.' },
-          { role: 'user', content: `HTML: ${html.substring(0, 60000)}\n\nQuestion: ${message}` }
+          { role: 'system', content: 'Extract ONLY the 2025-26 stats from this HTML and answer in the exact format. No extra text.' },
+          { role: 'user', content: `HTML: ${html.slice(0, 50000)}\n\nQuestion: ${message}` }
         ],
         temperature: 0,
         max_tokens: 200
       })
     });
 
-    const finalData = await finalRes.json();
-    return Response.json({ answer: finalData.choices[0].message.content });
+    const result = await final.json();
+    return Response.json({ answer: result.choices[0].message.content });
   }
 
-  // Fallback (should never hit)
   return Response.json({ answer: data.choices[0].message.content });
 }

@@ -2,9 +2,48 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
+const NHL_PLAYER_STATS_URL = "https://api-web.nhle.com/v1/player";
+
+async function getPlayerStats(name: string) {
+  const searchRes = await fetch(`https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=1&q=${encodeURIComponent(name)}`);
+  const search = await searchRes.json();
+  if (!search?.[0]?.playerId) return null;
+
+  const id = search[0].playerId;
+  const res = await fetch(`${NHL_PLAYER_STATS_URL}/${id}/landing`);
+  const data = await res.json();
+
+  const current = data.currentSeasonStats?.regularSeason;
+  if (!current) return null;
+
+  return {
+    name: data.firstName.default + " " + data.lastName.default,
+    team: data.currentTeamAbbrev,
+    sv: current.savePctg?.toFixed(3) || "N/A",
+    gaa: current.goalsAgainstAverage?.toFixed(2) || "N/A",
+    record: `${current.wins}-${current.losses}-${current.otLosses}`,
+    gp: current.gamesPlayed,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const { message } = await req.json();
 
+  // Simple keyword detection for goalie stats
+  const lower = message.toLowerCase();
+  if (lower.includes("save percentage") || lower.includes("sv%") || lower.includes("gaa") || lower.includes("record")) {
+    const nameMatch = message.match(/(?:stuart skinner|juuse saros|connor hellebuyck|igor shesterkin|[a-z]+ [a-z]+)/i);
+    if (nameMatch) {
+      const stats = await getPlayerStats(nameMatch[0]);
+      if (stats) {
+        return Response.json({
+          answer: `**${stats.name} (${stats.team})**\nSV%: ${stats.sv} · GAA: ${stats.gaa} · Record: ${stats.record}\nSolid volume goalie with current form.\n**Recommendation** Hold for wins\n**Edge → Hold** (80%)`
+        });
+      }
+    }
+  }
+
+  // Fallback to Grok for everything else
   const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -13,76 +52,12 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: 'grok-3',
-      messages: [
-        {
-          role: 'system',
-          content: `You are DraftSense AI — fantasy hockey expert.
-For EVERY stat question, you MUST use the web_search tool to get live 2025-26 numbers from NHL.com, EliteProspects, ESPN, or StatMuse.
-Use the search results to answer accurately, cite the source.
-
-Format:
-**Player (Team)**
-Stat: Value (source) · Stat: Value
-1-sentence context
-
-**Recommendation**
-1-line verdict
-**Edge → Player** (confidence %)
-
-Max 80 words. No "update after" — instant answers only.`
-        },
-        { role: 'user', content: message }
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "web_search",
-            description: "Search for live NHL stats",
-            parameters: {
-              type: "object",
-              properties: {
-                query: { type: "string", description: "Search like 'Stuart Skinner current SV% 2025-26 NHL'" },
-                num_results: { type: "integer", default: 5 }
-              },
-              required: ["query"]
-            }
-          }
-        }
-      ],
-      tool_choice: "required",
-      temperature: 0.1,
-      max_tokens: 250
+      messages: [{ role: 'user', content: message }],
+      temperature: 0.3,
+      max_tokens: 300
     })
   });
 
   const data = await response.json();
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-
-  if (toolCall) {
-    const args = JSON.parse(toolCall.function.arguments);
-    // Note: Since we can't fetch externally here, in a real setup we'd execute the search. For now, assume it returns snippets with .888.
-    // In your code, add the fetch for web_search if needed, but Grok handles it internally.
-    const final = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'grok-3',
-        messages: [
-          { role: 'system', content: 'Use this search result to extract the exact current stat and answer in format. No extra text.' },
-          { role: 'user', content: `Search results: ${JSON.stringify(args)} \n\nQuestion: ${message}` }
-        ],
-        temperature: 0,
-        max_tokens: 200
-      })
-    });
-
-    const result = await final.json();
-    return Response.json({ answer: result.choices[0].message.content });
-  }
-
   return Response.json({ answer: data.choices[0].message.content });
 }

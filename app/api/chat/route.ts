@@ -16,19 +16,21 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are DraftSense AI.
-For any current stat question, use browse_page on the player's NHL.com or EliteProspects page.
-Extract ONLY the 2025-26 season stats.
-Answer instantly with real numbers — no "will update" or "retrieval".
+          content: `You are DraftSense AI — fantasy hockey expert.
+For EVERY stat question, use browse_page on EliteProspects player pages (e.g., https://www.eliteprospects.com/player/ID/player-name).
+Extract ONLY 2025-26 season stats: SV%, GAA, record, goals, points, etc.
+Answer instantly with real numbers — no "update after" or placeholders.
 
 Format:
 **Player (Team)**
-SV%: .XXX (NHL.com) · GAA: X.XX · Record: W-L-OTL
+Stat: Value (EliteProspects) · Stat: Value
 1-sentence context
 
 **Recommendation**
-Verdict
-**Edge → Player** (confidence %)`
+1-line verdict
+**Edge → Player** (confidence %)
+
+Max 80 words. Cite EliteProspects.`
         },
         { role: 'user', content: message }
       ],
@@ -37,12 +39,12 @@ Verdict
           type: "function",
           function: {
             name: "browse_page",
-            description: "Get live NHL stats",
+            description: "Scrape EliteProspects for live NHL stats",
             parameters: {
               type: "object",
               properties: {
                 url: { type: "string" },
-                instructions: { type: "string", description: "Extract ONLY 2025-26 stats: SV%, GAA, record, goals, points. Ignore everything else." }
+                instructions: { type: "string", description: "Extract ONLY 2025-26 season stats from the regular season table: SV%, GAA, record, GP, saves, shots. Ignore career/previous years. Provide exact numbers." }
               },
               required: ["url", "instructions"]
             }
@@ -50,7 +52,7 @@ Verdict
         }
       ],
       tool_choice: "required",
-      temperature: 0,
+      temperature: 0.1,
       max_tokens: 250
     })
   });
@@ -60,7 +62,9 @@ Verdict
 
   if (toolCall) {
     const args = JSON.parse(toolCall.function.arguments);
-    const page = await fetch(args.url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const page = await fetch(args.url, { 
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } 
+    });
     const html = await page.text();
 
     const final = await fetch('https://api.x.ai/v1/chat/completions', {
@@ -72,8 +76,8 @@ Verdict
       body: JSON.stringify({
         model: 'grok-3',
         messages: [
-          { role: 'system', content: 'Extract ONLY the 2025-26 stats from this HTML and answer in the exact format. No extra text.' },
-          { role: 'user', content: `HTML: ${html.slice(0, 50000)}\n\nQuestion: ${message}` }
+          { role: 'system', content: 'From this EliteProspects HTML, extract ONLY the 2025-26 stats (SV%, GAA, record) and answer in the exact format. No extra text.' },
+          { role: 'user', content: `HTML: ${html.slice(0, 60000)}\n\nQuestion: ${message}` }
         ],
         temperature: 0,
         max_tokens: 200

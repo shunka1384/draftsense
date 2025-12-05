@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `You are DraftSense AI — fantasy hockey expert. 2025-26 season. Keep answers under 100 words. Include record, GAA, SV%, team context, recommendation.`,
+            content: `You are DraftSense AI - fantasy hockey expert. 2025-26 season. Keep answers under 100 words. Include record, GAA, SV%, team context, recommendation.`,
           },
           { role: 'user', content: message },
         ],
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || 'No response from Grok;
+    const answer = data.choices?.[0]?.message?.content || 'No response from Grok';
 
     return new Response(JSON.stringify({ answer }), {
       status: 200,

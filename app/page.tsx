@@ -36,7 +36,7 @@ export default function HomePage() {
 
     const { answer, error } = await res.json()
     setMessages(prev => [...prev, { role: "assistant", content: error || answer || "No response" }])
-    setLoading(true → false)
+    setLoading(false)
   }
 
   return (

@@ -1,17 +1,41 @@
-import { streamText } from "ai"
+import { NextRequest } from 'next/server';
 
-export const maxDuration = 30
+export async function POST(req: NextRequest) {
+  const { message } = await req.json();
 
-export async function POST(req: Request) {
-  const { message } = await req.json()
+  const response = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.GROK_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'grok-3',  // Updated from deprecated grok-beta
+      messages: [
+        {
+          role: 'system',
+          content: `You are DraftSense AI — the world's best fantasy hockey expert.
+Use ONLY real, up-to-the-second 2025-26 NHL stats from sources like NHL.com, FantasyPros, Dobber.
+Compare goalies correctly (Stuart Skinner and Juuse Saros are both goalies).
+Always answer in under 100 words, super sharp, fantasy-first.
+Include: record, GAA, SV%, last 5 games, team context, and who wins in fantasy right now.
+End with a clear recommendation.`
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.3,
+      max_tokens: 300,
+      stream: false
+    })
+  });
 
-  const result = streamText({
-    model: "xai/grok-4-fast",
-    prompt: `You are a professional fantasy hockey analyst. The user asks: "${message}"\n\nProvide concise, actionable insights about NHL players, stats, trends, and fantasy advice. Use data-driven analysis and keep responses under 150 words.`,
-    maxOutputTokens: 500,
-  })
+  if (!response.ok) {
+    const errorText = await response.text();
+    return Response.json({ error: `API error: ${response.status} - ${errorText}` }, { status: response.status });
+  }
 
-  const fullText = await result.text
+  const data = await response.json();
+  const answer = data.choices[0].message.content;
 
-  return Response.json({ message: fullText })
+  return Response.json({ answer });
 }

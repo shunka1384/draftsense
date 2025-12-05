@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "x-ai/grok-beta",
+        model: "x-ai/grok-4",
         messages: [
           { role: "system", content: "You are DraftSense AI — fantasy hockey expert. Use live web search for all 2025-26 stats. Be accurate, concise, cite sources." },
           { role: "user", content: message }

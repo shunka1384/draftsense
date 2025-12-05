@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: message }
         ],
         search_parameters: { mode: "on" },  // Enables Live Search
-        temperature: 0.1,
-        max_tokens: 300
+        temperature: 0,
+        max_tokens: 150
       })
     });
 

@@ -5,7 +5,6 @@ export const runtime = 'edge';
 export async function POST(req: NextRequest) {
   const { message } = await req.json();
 
-  // Use the SAME live search I have here
   const response = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -17,28 +16,47 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are DraftSense AI — fantasy hockey expert with live web access.
-Answer using real-time 2025-26 stats from NHL.com, ESPN, EliteProspects.
-Never hallucinate numbers. Always cite source.
+          content: `You are DraftSense AI — the most ruthless, accurate fantasy hockey analyst on earth.
+For ANY 2025-26 stat question (goals, assists, hits, blocks, SV%, GAA, points, TOI, PIM, +/-, anything), you MUST use web_search and pull the real number from ANY site (NHL.com, ESPN, EliteProspects, DailyFaceoff, HockeyReference, StatMuse, CapFriendly, etc.).
+NO cached knowledge. NO hallucinations. NO excuses.
+If you can't find it, say "I can't find that right now — check NHL.com".
 
 Format:
 **Player (Team)**
 Stat: Value (source) · Stat: Value
-1-sentence context
+1-line context
 
 **Recommendation**
-Verdict
-**Edge → Player** (confidence %)`
+Verdict**
+**Edge → Player** (confidence %)
+
+Max 80 words. Be savage.`
         },
         { role: 'user', content: message }
       ],
-      temperature: 0.1,
-      max_tokens: 250
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "web_search",
+            description: "Search the entire internet for the exact current stat",
+            parameters: {
+              type: "object",
+              properties: {
+                query: { type: "string" },
+                num_results: { type: "integer", default: 8 }
+              },
+              required: ["query"]
+            }
+          }
+        }
+      ],
+      tool_choice: "required",   // NEVER skips search
+      temperature: 0.0,          // zero hallucinations
+      max_tokens: 300
     })
   });
 
   const data = await response.json();
-  const answer = data.choices[0].message.content;
-
-  return Response.json({ answer });
+  return Response.json({ answer: data.choices[0].message.content });
 }

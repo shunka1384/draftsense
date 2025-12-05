@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "x-ai/grok-beta",  // ← this is the real Grok with live search
+      model: "x-ai/grok-1",  // ← this is the real Grok with live search
       messages: [
         { role: "system", content: "You are DraftSense AI — fantasy hockey expert. Use live web search for all 2025-26 stats. Be accurate, concise, cite sources." },
         { role: "user", content: message }

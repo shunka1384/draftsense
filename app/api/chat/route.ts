@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
         { role: 'user', content: message }
       ],
       temperature: 0,
-      max_tokens: 150,  // Min for quick responses
-      stream: true  // Streams output — starts in 1-2s
+      max_tokens: 150,  
+      stream: true  
     })
   });
 

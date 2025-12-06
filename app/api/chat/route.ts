@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: message }
         ],
         search_parameters: { mode: 'auto' },
-        temperature: 0.1,
-        max_tokens: 250
+        temperature: 0,
+        max_tokens: 100
       })
     });
 
